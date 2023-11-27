@@ -1,3 +1,7 @@
+#include <inttypes.h>
+#include <stdio.h>
+#include <limits.h>
+
 // below is the pseudocode fro mount
 
 
@@ -57,6 +61,10 @@ typedef struct {
 
 directory_contents root_directory;
 
+uint32_t determine_root_cluster(const bpb_t *bpb) {
+    return bpb->BPB_RootClus;
+}
+
 void read_root_directory(FILE *img, const bpb_t *bpb) {
     uint32_t root_cluster = determine_root_cluster(bpb);
 
@@ -85,12 +93,13 @@ void mount_fat32(FILE *img) {
     // 2. Set up any global variables or structures needed
 }
 
-char cwd[PATH_MAX_LENGTH]; // Define PATH_MAX_LENGTH as needed
+/*char cwd[PATH_MAX_LENGTH]; // Define PATH_MAX_LENGTH as needed
 
 void set_cwd(const char *path) {
     strncpy(cwd, path, PATH_MAX_LENGTH);
     cwd[PATH_MAX_LENGTH - 1] = '\0'; // Ensure null-termination
 }
+*/
 
 void process_cd(/* parameters */) {
     // Change directory command implementation
@@ -100,6 +109,15 @@ void process_ls(/* parameters */) {
     // List directory contents command implementation
 }
 
+void read_bpb(FILE *img, bpb_t *bpb) {
+    // Seek to the start of the file (where the BPB is located)
+    fseek(img, 0, SEEK_SET);
+
+    // Read the BPB into the provided bpb_t structure
+    fread(bpb, sizeof(bpb_t), 1, img);
+}
+
+
 // you can give it another name
 // fill the parameters
 void main_process(FILE *img) {
@@ -107,23 +125,25 @@ void main_process(FILE *img) {
     bpb_t bpb;
     read_bpb(img, &bpb);
     read_root_directory(img, &bpb);
-    set_cwd("/"); // Set initial cwd to root
+    //set_cwd("/"); // Set initial cwd to root
 
     
     
     while (1) {
         // 1. Get cmd from input
         // Example: scanf("%s", cmd);
-        printf("%s/path/to/cwd> ", cwd); // Display prompt
-        char cmd[CMD_MAX_LENGTH];
-        scanf("%s", cmd);
+        //printf("%s/path/to/cwd> ", cwd); // Display prompt
+        //char cmd[CMD_MAX_LENGTH];
+        //scanf("%s", cmd);
 
-        if (strcmp(cmd, "exit") == 0) break;
-        else if (strcmp(cmd, "cd") == 0) process_cd(/* parameters */);
-        else if (strcmp(cmd, "ls") == 0) process_ls(/* parameters */);
+        //if (strcmp(cmd, "exit") == 0) break;
+        //else if (strcmp(cmd, "cd") == 0) process_cd(/* parameters */);
+        //else if (strcmp(cmd, "ls") == 0) process_ls(/* parameters */);
         // Add other commands as needed
     }
 }
+
+
 /*
 void main_process() {
     while (1) {
@@ -138,17 +158,6 @@ void main_process() {
 }
 */
 
-void read_bpb(FILE *img, bpb_t *bpb) {
-    // Seek to the start of the file (where the BPB is located)
-    fseek(img, 0, SEEK_SET);
-
-    // Read the BPB into the provided bpb_t structure
-    fread(bpb, sizeof(bpb_t), 1, img);
-}
-
-uint32_t determine_root_cluster(const bpb_t *bpb) {
-    return bpb->BPB_RootClus;
-}
 
 
 int main(int argc, char const *argv[]) {

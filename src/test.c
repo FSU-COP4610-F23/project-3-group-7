@@ -1,6 +1,3 @@
-//#include <stdio.h>
-//#include <stdint.h>
-
 #include <string.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -8,6 +5,10 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <dirent.h>
+
 #include "lexer.h"
 
 typedef struct __attribute__((packed)) BPB {
@@ -49,7 +50,46 @@ typedef struct __attribute__((packed)) directory_entry {
 void showPrompt()
 {
     char* str1 = "fat32.img/> "; 
+    //char* str2 = getenv("PWD");
     printf("\n%s", str1); 
+    //printf("%s> ", str2);
+    /*char* str1 = "fat32.img/> ";
+
+    char str2[1024]; // Using an array instead of a pointer
+
+    if (getcwd(str2, sizeof(str2)) != NULL) {
+        char* substring = strstr(str2, "fat32");
+        if (substring != NULL) {
+            printf("\n%s", str1);
+            printf("%s> ", substring);
+        } else {
+            perror("Invalid directory");
+        }
+    } else {
+        perror("getcwd() error");
+    }*/
+}
+
+void process_ls() {
+    DIR *directory;
+    struct dirent *entry;
+
+    directory = opendir(".");
+    if (directory == NULL) {
+        printf("Unable to open directory\n");
+        return;
+    }
+
+    while ((entry = readdir(directory)) != NULL) {
+        printf("%s\n", entry->d_name);
+    }
+
+    closedir(directory);
+}
+
+void process_mkdir(const char* dirname) {
+    
+    
 }
 
 // other data structure, global variables, etc. define them in need.
@@ -68,6 +108,45 @@ void mount_fat32() {
     // 1. decode the bpb
 }
 
+uint32_t totalClustersInDataRegion()
+{
+    // Sectors occupied by the root directory (root entries * size of a directory entry)
+    uint32_t rootDirSectors = ((bpb.BPB_RootEntCnt * 32) + (bpb.BPB_BytsPerSec - 1)) / bpb.BPB_BytsPerSec;
+
+    printf("\nthis is the rootDirSectors var: %u\n", rootDirSectors);
+    // Calculate the sectors occupied by the FAT tables
+    uint32_t fatSize = bpb.BPB_sectorsPerFAT32 * bpb.BPB_NumFATs;
+
+    printf("\nthis is the sectorsPerFAT32 var: %u\n", bpb.BPB_sectorsPerFAT32);
+    printf("\nthis is the fatSize var: %u\n", fatSize);
+    // Calculate the data region size in sectors
+    uint32_t dataRegionSize = bpb.BPB_TotSec32 - (bpb.BPB_RsvdSecCnt + rootDirSectors); //+ fatSize
+
+    printf("\nthis is the dataRegionSize var: %u\n", dataRegionSize);
+    printf("\nthis is the SecPerClus var: %u\n", bpb.BPB_SecPerClus);
+    // Calculate the total number of clusters
+    uint32_t totalClusters = dataRegionSize / bpb.BPB_SecPerClus;
+    printf("\nthis is the totalClusters var: %u\n", totalClusters);
+    return totalClusters; 
+}
+
+uint32_t calculate_first_data_sector() {
+    // Sectors occupied by the reserved regions and the number of FATs
+    uint32_t reservedSectors = bpb.BPB_RsvdSecCnt;
+    uint32_t numberOfFATs = bpb.BPB_NumFATs;
+
+    // Sectors occupied by the root directory (root entries * size of a directory entry)
+    uint32_t rootDirSectors = ((bpb.BPB_RootEntCnt * 32) + (bpb.BPB_BytsPerSec - 1)) / bpb.BPB_BytsPerSec;
+
+    // Calculate the sectors occupied by the FAT tables
+    uint32_t fatSize = bpb.BPB_sectorsPerFAT32 * numberOfFATs;
+
+    // Calculate the first data sector
+    uint32_t firstDataSector = reservedSectors + fatSize + rootDirSectors;
+
+    return firstDataSector;
+}
+
 // you can give it another name
 // fill the parameters
 void main_process() {
@@ -81,7 +160,6 @@ void main_process() {
         // if cmd is "exit" break;
         if (strcmp(input, "exit") == 0)
 		{
-			// Print valid commands.
 			break;
 		}
 
@@ -89,26 +167,41 @@ void main_process() {
 
 
         // else if cmd is "cd" process_cd();
-        if (strcmp(tokens->items[0], "/bin/cd") == 0)
+        if (strcmp(tokens->items[0], "cd") == 0)
         {
+            //cd variables
+            char cwd[200];
+            int setenv(const char *name, const char *value, int overwrite);
+            //processing cd
+            if (tokens->size == 1) {chdir(getenv("HOME"));}
+			else {chdir(tokens->items[1]);}
+			getcwd(cwd,200);
+			setenv("PWD",cwd,1);
             //process_cd(); 
         } else if (strcmp(tokens->items[0], "ls") == 0)
         {
-            // else if cmd is "ls" process_ls();
-            // ...
-        } else if (strcmp(tokens->items[0], "info") == 0)
+            process_ls();
+        } 
+        else if (strcmp(tokens->items[0], "mkdir") == 0)
+        {
+            process_mkdir(tokens->items[1]);
+
+        }
+        
+        else if (strcmp(tokens->items[0], "info") == 0)
         {
             printf("Bytes Per Sector: %u\n", bpb.BPB_BytsPerSec);
             printf("Sectors Per Cluster: %u\n", bpb.BPB_SecPerClus);
-            printf("Total clusters in Data Region: %u\n", bpb.BPB_NumFATs);
-            printf("# of entries in one FAT: %u\n", bpb.BPB_RootEntCnt);
-            printf("Size of Image (bytes): %u\n", bpb.BPB_TotSec32);
-            printf("Root Cluster: %u\n", bpb.BPB_RootEntCnt);
-            printf("FirstDataSector: %u\n", bpb.BPB_TotSec32);
+
+            printf("Total clusters in Data Region: %u\n", totalClustersInDataRegion());
+            printf("# of entries in one FAT: %u\n", bpb.BPB_NumHeads);
+            printf("Size of Image (bytes): %u\n", bpb.BPB_Media);
+            printf("Root Cluster: %u\n", bpb.BPB_NumFATs);
+            printf("FirstDataSector: %u\n", calculate_first_data_sector());
             printf("Total Sectors: %u\n", bpb.BPB_TotSec32);
             //these are the right ones below
             //printf("Reserved Sectors: %u\n", bpb.BPB_RsvdSecCnt);
-            printf("Number of FATs: %u\n", bpb.BPB_NumFATs);    //rootcluster ???
+            printf("\nNumber of FATs: %u\n", bpb.BPB_NumFATs);    //rootcluster ???
             printf("Root Entries: %u\n", bpb.BPB_RootEntCnt);
             printf("Total Sectors: %u\n", bpb.BPB_TotSec32);
         }

@@ -8,6 +8,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <dirent.h>
+#include <ctype.h>
+
 
 #include "lexer.h"
 
@@ -60,6 +62,11 @@ typedef struct __attribute__((packed)) directory_entry {
     uint16_t DIR_FstClusLO;
     uint32_t DIR_FileSize;
 } dentry_t;
+
+uint32_t current_dir_cluster = 0; //chat
+
+void format_dir_name(const char *dir_name, char *formatted_name); //chat
+
 
 void showPrompt(char const *argv)
 {
@@ -235,11 +242,27 @@ long size_of_image()
     return fileSize; 
 }
 
-void cd_process(int fat32_fd, uint32_t dir_offset, uint32_t dir_size)
+
+/*void cd_process(int fat32_fd, uint32_t dir_offset, uint32_t dir_size)
 {
     uint32_t current_offset = dir_offset; 
+
+    char *charPointer;
+
     while (current_offset < dir_offset + dir_size) {
         dentry_t *dentry = encode_dir_entry(fat32_fd, current_offset);
+        //dentry->DIR_Name[10] = '\0';
+
+        charPointer = malloc(strlen(dentry->DIR_Name) + 1);  // +1 for the null terminator
+        if (charPointer != NULL) {
+        strcpy(charPointer, dentry->DIR_Name);
+
+        // Now charPointer is a null-terminated string
+        printf("Converted string: %s\n", charPointer);
+
+        // Don't forget to free the allocated memory when done
+        
+    }
 
         // Check if the directory entry is valid
         if (dentry->DIR_Name[0] == 0x00) { // No more entries
@@ -254,7 +277,8 @@ void cd_process(int fat32_fd, uint32_t dir_offset, uint32_t dir_size)
             // Print the directory entry
             if((dentry->DIR_Attr & 0x10) == 0x10)
             {
-                if (dentry->DIR_Name == tokens->items[1])
+                printf("%s is a directory. \n", dentry->DIR_Name); 
+                if (strcmp(charPointer,"BLUE") == 0)
                 {
                     printf("%s was found, so cd into it! \n ", dentry->DIR_Name);
                     //dbg_print_dentry(dentry);
@@ -266,12 +290,231 @@ void cd_process(int fat32_fd, uint32_t dir_offset, uint32_t dir_size)
 
 
         free(dentry);
+        free(charPointer);
 
         // Move to the next directory entry
         current_offset += sizeof(dentry_t);
     }
     printf("%s was NOT found \n ", tokens->items[1]);
     return; 
+}*/
+
+
+/* 
+void cd_process(int fat32_fd, const char* target_dir, uint32_t dir_size) {
+    uint32_t current_offset = current_dir_cluster; // start from the current directory
+
+    while (current_offset < dir_size + current_offset) {
+        dentry_t *dentry = encode_dir_entry(fat32_fd, current_offset);
+
+        if (dentry->DIR_Name[0] == 0x00) { // End of directory entries
+            free(dentry);
+            break;
+        }
+
+        if (dentry->DIR_Name[0] != (char)0xE5 && (dentry->DIR_Attr & 0x10) == 0x10)  { // It's a directory and not deleted
+            char formatted_name[12];
+            format_dir_name(dentry->DIR_Name, formatted_name); // You need to implement this function to format the name
+
+            if (strcmp(formatted_name, target_dir) == 0) {
+                // Change to the new directory
+                current_dir_cluster = dentry->DIR_FstClusLO;
+                free(dentry);
+                return;
+            }
+        }
+
+        free(dentry);
+        current_offset += sizeof(dentry_t);
+    }
+
+    printf("Directory '%s' not found.\n", target_dir);
+}
+//chat's version
+
+void cd_process(int fat32_fd, const char* target_dir, uint32_t dir_size) {
+    uint32_t start_offset = current_dir_cluster; // Assuming current_dir_cluster is the starting cluster number
+    uint32_t current_offset = start_offset; // start from the current directory
+
+    while (current_offset < start_offset + dir_size) {
+        dentry_t *dentry = encode_dir_entry(fat32_fd, current_offset);
+
+        if (dentry->DIR_Name[0] == 0x00) { // End of directory entries
+            free(dentry);
+            break;
+        }
+
+        if (dentry->DIR_Name[0] != (char)0xE5 && (dentry->DIR_Attr & 0x10) == 0x10)  { // It's a directory and not deleted
+            char formatted_name[12];
+            //format_dir_name(dentry->DIR_Name, formatted_name); // Format the name for comparison
+            //printf("Formatted Name: %s\n", formatted_name);
+            
+
+            if (strcmp(dentry->DIR_Name, target_dir) == 0) {
+                // Change to the new directory
+                current_dir_cluster = dentry->DIR_FstClusLO;
+                free(dentry);
+                return;
+            }
+        }
+        
+        free(dentry);
+        current_offset += sizeof(dentry_t); // Move to the next directory entry
+    }
+
+    printf("Directory '%s' not found.\n", target_dir);
+}
+
+*/
+
+//old latest version 
+/*void cd_process(int fat32_fd, const char* target_dir, uint32_t dir_size) {
+    uint32_t start_offset = current_dir_cluster; // Assuming current_dir_cluster is the starting cluster number
+    uint32_t current_offset = start_offset; // start from the current directory
+
+    while (current_offset < start_offset + dir_size) {
+        dentry_t *dentry = encode_dir_entry(fat32_fd, current_offset);
+        printf("DIR_Name: %s\n", dentry->DIR_Name);
+
+        if (dentry->DIR_Name[0] == 0x00) { // End of directory entries
+            free(dentry);
+            break;
+        }
+
+        tokenlist* dname; 
+        dname = get_tokens(dentry->DIR_Name);*/
+
+        /*if (dentry->DIR_Name[0] != (char)0xE5 && (dentry->DIR_Attr & 0x10) == 0x10) { // It's a directory and not deleted
+            // Note: DIR_Name is not null-terminated, so we need to handle it carefully
+            char dirName[12];
+            memset(dirName, 0, sizeof(dirName)); // Initialize with zeros
+            strncpy(dirName, dentry->DIR_Name, sizeof(dentry->DIR_Name));
+            //printf("DOES THIS WORK \n"); 
+            if (strcmp(dentry->DIR_Name, tokens->items[1]) == 0) {
+                // Change to the new directory
+                printf("DOES THIS WORK \n"); 
+                current_dir_cluster = dentry->DIR_FstClusLO;
+                free(dentry);
+                return;
+            }*/
+
+            /*if (strncmp(dirName, target_dir, strlen(target_dir)) == 0) {
+                // Change to the new directory
+                current_dir_cluster = dentry->DIR_FstClusLO;
+                free(dentry);
+                return;
+            }*/
+       // }
+
+   //     free(dentry);
+//        current_offset += sizeof(dentry_t); // Move to the next directory entry
+  //  }
+
+ //   printf("Directory '%s' not found.\n", target_dir);
+ //latest version 
+//}
+
+void cd_process(int fat32_fd, const char* target_dir, uint32_t dir_size) {
+    printf("tokens->items[1] is set to:%s.\n",tokens->items[1]);
+    uint32_t current_offset = current_dir_cluster * bpb.BPB_SecPerClus * bpb.BPB_BytsPerSec;
+    uint32_t end_offset = current_offset + dir_size;
+
+    while (current_offset < end_offset) { //current_offset < dir_offset + dir_size
+        printf("TESTEST\n");
+        dentry_t *dentry = encode_dir_entry(fat32_fd, current_offset);
+
+        if (dentry->DIR_Name[0] == 0x00) { // End of directory entries
+            printf("TESTEST1\n");
+            free(dentry);
+            break;
+        }
+        printf("tokens->items[1] is set to: %s\n",tokens->items[1]);
+        if (dentry->DIR_Name[0] != (char)0xE5 && (dentry->DIR_Attr & 0x10) == 0x10) { // It's a directory and not deleted
+            char dirName[12] = {0};
+            memcpy(dirName, dentry->DIR_Name, 11);
+
+            // Transform directory name to uppercase for comparison
+            for (int i = 0; i < 11; i++) {
+                dirName[i] = toupper(dirName[i]);
+            }
+            //printf("tokens->items[1] is set to: %s\n",tokens->items[1]);
+            if (strcmp("BLUE", tokens->items[1]) == 0) {
+                // Change to the new directory
+                printf("DOES THIS WORK BLUE \n"); 
+                current_dir_cluster = dentry->DIR_FstClusLO;
+                free(dentry);
+                return;
+            }
+
+            if (strcmp("RED", tokens->items[1]) == 0) {
+                // Change to the new directory
+                printf("DOES THIS WORK RED\n"); 
+                current_dir_cluster = dentry->DIR_FstClusLO;
+                free(dentry);
+                return;
+            }
+
+            if (strcmp("GREEN", tokens->items[1]) == 0) {
+                // Change to the new directory
+                printf("DOES THIS WORK GREEN\n"); 
+                current_dir_cluster = dentry->DIR_FstClusLO;
+                free(dentry);
+                return;
+            }
+
+            // Compare with the target directory
+            /*if (strncmp(dirName, target_dir, strlen(target_dir)) == 0) {
+                current_dir_cluster = ((dentry->DIR_FstClusHI << 16) | dentry->DIR_FstClusLO);
+                free(dentry);
+                return;
+            }*/
+        }
+
+        free(dentry);
+        current_offset += sizeof(dentry_t);
+    }
+
+    printf("Directory '%s' not found.\n", target_dir);
+}
+
+
+
+void format_dir_name(const char *dir_name, char *formatted_name) {
+    // Clear the formatted name buffer
+    memset(formatted_name, 0, 12);
+
+    int name_length = 0;
+    for (int i = 0; i < 8; i++) { // First 8 characters for the name
+        if (dir_name[i] != ' ') {
+            formatted_name[name_length++] = dir_name[i];
+        } else {
+            break;
+        }
+    }
+
+    // Check if there is an extension
+    bool has_extension = false;
+    for (int i = 8; i < 11; i++) {
+        if (dir_name[i] != ' ') {
+            has_extension = true;
+            break;
+        }
+    }
+
+    // If there is an extension, add a period and then the extension
+    if (has_extension) {
+        formatted_name[name_length++] = '.';
+        for (int i = 8; i < 11; i++) {
+            if (dir_name[i] != ' ') {
+                formatted_name[name_length++] = dir_name[i];
+            } else {
+                break;
+            }
+        }
+    }
+
+    // Null-terminate the string
+    formatted_name[name_length] = '\0';
 }
 
 // you can give it another name
@@ -297,23 +540,10 @@ void main_process(char const *argv, uint32_t rootDirOffset) {
         // else if cmd is "cd" process_cd();
         if (strcmp(tokens->items[0], "cd") == 0)
         {
-            
-           /* 
-            //cd variables
-            char cwd[200];
-            int setenv(const char *name, const char *value, int overwrite);
-            //processing cd
-            if (tokens->size == 1) {chdir(getenv("HOME"));}
-			else {chdir(tokens->items[1]);}
-			getcwd(cwd,200);
-			setenv("PWD",cwd,1);
-            //process_cd(); 
-            */
 
-           //idk
-
-           cd_process(fd, rootDirOffset, bpb.BPB_BytsPerSec); 
-            close(fd);
+           //cd_process(fd, rootDirOffset, bpb.BPB_BytsPerSec); 
+            cd_process(fd, tokens->items[1], bpb.BPB_BytsPerSec); 
+            //close(fd);
 
 
         } else if (strcmp(tokens->items[0], "ls") == 0)
@@ -328,7 +558,7 @@ void main_process(char const *argv, uint32_t rootDirOffset) {
             read_directory(fd, rootDirOffset, bpb.BPB_BytsPerSec);
 
             
-            close(fd);
+           // close(fd);
         } 
         
         
@@ -350,8 +580,8 @@ void main_process(char const *argv, uint32_t rootDirOffset) {
         }
         
     }
+    close(fd);
 }
-
 
 int main(int argc, char const *argv[])
 {
@@ -376,6 +606,7 @@ int main(int argc, char const *argv[])
 
      // Calculate the offset to the root directory cluster
     uint32_t rootDirCluster = bpb.BPB_rootCluster;
+    current_dir_cluster = rootDirCluster;  //chat 
 
     // Calculate the offset in bytes
     uint32_t rootDirOffset = ((rootDirCluster - 2) * bpb.BPB_SecPerClus + bpb.BPB_RsvdSecCnt +

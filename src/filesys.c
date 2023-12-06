@@ -1,9 +1,20 @@
-#include <inttypes.h>
+#include <string.h>
+#include <unistd.h>
 #include <stdio.h>
-#include <limits.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <inttypes.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <dirent.h>
+#include <stddef.h>
 
-// below is the pseudocode fro mount
+#include "lexer.h"
 
+//gcc -c -g -Wall -Wextra -std=c99 test.c -o test.o
+//gcc -g -Wall -Wextra -std=c99 test.o lexer.o
+//./a.out file32.img 
 
 typedef struct __attribute__((packed)) BPB {
     // below 36 bytes are the main bpb
@@ -23,24 +34,12 @@ typedef struct __attribute__((packed)) BPB {
 	uint32_t BPB_TotSec32;
     // below are the extend bpb.
     // please declare them.
-    uint32_t BPB_FATSz32; //chat
-    uint16_t BPB_ExtFlags;
-    uint16_t BPB_FSVer;
     uint32_t BPB_RootClus;
-    uint16_t BPB_FSInfo;
-    uint16_t BPB_BkBootSec;
-    uint8_t BPB_Reserved[12];
-    uint8_t BS_DrvNum;
-    uint8_t BS_Reserved1;
-    uint8_t BS_BootSig;
-    uint32_t BS_VolID;
-    char BS_VolLab[11];
-    char BS_FilSysType[8]; //chat
-
+    uint32_t BPB_sectorsPerFAT32;
+    uint32_t BPB_totalSectors;
+    uint32_t BPB_FATSz32;
 } bpb_t;
 
-FILE *fat32_img; // The opened fat32.img file
-char *current_working_directory; 
 
 typedef struct __attribute__((packed)) directory_entry {
     char DIR_Name[11];
@@ -54,29 +53,49 @@ typedef struct __attribute__((packed)) directory_entry {
     uint32_t DIR_FileSize;
 } dentry_t;
 
-typedef struct {
-    dentry_t *entries; // Array of directory entries
-    size_t num_entries; // Number of entries in the array
-} directory_contents;
+void showPrompt()
+{
+    char* str1 = "fat32.img/> "; 
+    //char* str2 = getenv("PWD");
+    printf("\n%s", str1); 
+    //printf("%s> ", str2);
+    /*char* str1 = "fat32.img/> ";
 
-directory_contents root_directory;
+    char str2[1024]; // Using an array instead of a pointer
 
-uint32_t determine_root_cluster(const bpb_t *bpb) {
-    return bpb->BPB_RootClus;
+    if (getcwd(str2, sizeof(str2)) != NULL) {
+        char* substring = strstr(str2, "fat32");
+        if (substring != NULL) {
+            printf("\n%s", str1);
+            printf("%s> ", substring);
+        } else {
+            perror("Invalid directory");
+        }
+    } else {
+        perror("getcwd() error");
+    }*/
 }
 
-void read_root_directory(FILE *img, const bpb_t *bpb) {
-    uint32_t root_cluster = determine_root_cluster(bpb);
+void process_ls() {
+    DIR *directory;
+    struct dirent *entry;
 
-    // Calculate the location of the root directory in the image
-    // This will depend on your filesystem's specifics, like sector size, FAT size, etc.
+    directory = opendir(".");
+    if (directory == NULL) {
+        printf("Unable to open directory\n");
+        return;
+    }
 
-    // Seek to the root directory's location
-    // fseek(img, calculated_location, SEEK_SET);
+    while ((entry = readdir(directory)) != NULL) {
+        printf("%s\n", entry->d_name);
+    }
 
-    // Read the directory entries
-    // Use appropriate logic to read the directory entries into root_directory.entries
-    // Update root_directory.num_entries accordingly
+    closedir(directory);
+}
+
+void process_mkdir(const char* dirname) {
+    
+    
 }
 
 // other data structure, global variables, etc. define them in need.
@@ -86,95 +105,203 @@ void read_root_directory(FILE *img, const bpb_t *bpb) {
 // the opened files
 // other data structures and global variables you need
 
-// you can give it another name
-// fill the parameters
-void mount_fat32(FILE *img) {
-    // 1. Read and decode the BPB from the FAT32 image file
-    // 2. Set up any global variables or structures needed
-}
-
-/*char cwd[PATH_MAX_LENGTH]; // Define PATH_MAX_LENGTH as needed
-
-void set_cwd(const char *path) {
-    strncpy(cwd, path, PATH_MAX_LENGTH);
-    cwd[PATH_MAX_LENGTH - 1] = '\0'; // Ensure null-termination
-}
-*/
-
-void process_cd(/* parameters */) {
-    // Change directory command implementation
-}
-
-void process_ls(/* parameters */) {
-    // List directory contents command implementation
-}
-
-void read_bpb(FILE *img, bpb_t *bpb) {
-    // Seek to the start of the file (where the BPB is located)
-    fseek(img, 0, SEEK_SET);
-
-    // Read the BPB into the provided bpb_t structure
-    fread(bpb, sizeof(bpb_t), 1, img);
-}
-
+bpb_t bpb;
+tokenlist* tokens; 
+FILE *file; 
 
 // you can give it another name
 // fill the parameters
-void main_process(FILE *img) {
-    //char cmd[CMD_MAX_LENGTH]; // Define CMD_MAX_LENGTH appropriately
-    bpb_t bpb;
-    read_bpb(img, &bpb);
-    read_root_directory(img, &bpb);
-    //set_cwd("/"); // Set initial cwd to root
-
-    
-    
-    while (1) {
-        // 1. Get cmd from input
-        // Example: scanf("%s", cmd);
-        //printf("%s/path/to/cwd> ", cwd); // Display prompt
-        //char cmd[CMD_MAX_LENGTH];
-        //scanf("%s", cmd);
-
-        //if (strcmp(cmd, "exit") == 0) break;
-        //else if (strcmp(cmd, "cd") == 0) process_cd(/* parameters */);
-        //else if (strcmp(cmd, "ls") == 0) process_ls(/* parameters */);
-        // Add other commands as needed
-    }
+void mount_fat32() {
+    // 1. decode the bpb
 }
 
+uint32_t totalClustersInDataRegion()
+{
+    // Sectors occupied by the root directory (root entries * size of a directory entry)
+    /*uint32_t rootDirSectors = ((bpb.BPB_RootEntCnt * 32) + (bpb.BPB_BytsPerSec - 1)) / bpb.BPB_BytsPerSec;
 
-/*
+    printf("\nthis is the rootDirSectors var: %u\n", rootDirSectors);
+    // Calculate the sectors occupied by the FAT tables
+    uint32_t fatSize = bpb.BPB_sectorsPerFAT32 * bpb.BPB_NumFATs;
+
+    printf("\nthis is the sectorsPerFAT32 var: %u\n", bpb.BPB_sectorsPerFAT32);
+    printf("\nthis is the fatSize var: %u\n", fatSize);
+    // Calculate the data region size in sectors
+    uint32_t dataRegionSize = bpb.BPB_TotSec32 - (bpb.BPB_RsvdSecCnt + rootDirSectors); //+ fatSize
+
+    printf("\nthis is the dataRegionSize var: %u\n", dataRegionSize);
+    printf("\nthis is the SecPerClus var: %u\n", bpb.BPB_SecPerClus);
+    // Calculate the total number of clusters
+    uint32_t totalClusters = dataRegionSize / bpb.BPB_SecPerClus;
+    printf("\nthis is the totalClusters var: %u\n", totalClusters);
+    return totalClusters; */
+
+    // Total sectors in the file system
+    uint32_t totalSectors = (bpb.BPB_TotSec32 != 0) ? bpb.BPB_TotSec32 : bpb.BPB_TotSec16;
+
+    // Sectors occupied by the reserved regions and the number of FATs
+    uint32_t reservedSectors = bpb.BPB_RsvdSecCnt;
+    uint32_t numberOfFATs = bpb.BPB_NumFATs;
+
+    // Sectors occupied by the root directory (root entries * size of a directory entry)
+    uint32_t rootDirSectors = ((bpb.BPB_RootEntCnt * 32) + (bpb.BPB_BytsPerSec - 1)) / bpb.BPB_BytsPerSec;
+
+    // Calculate the sectors occupied by the FAT tables
+    uint32_t fatSize = bpb.BPB_sectorsPerFAT32 * numberOfFATs;
+
+    // Calculate the data region size in sectors
+    uint32_t dataRegionSize = totalSectors - (reservedSectors + rootDirSectors + fatSize);
+
+    // Calculate the total number of clusters
+    uint32_t totalClusters = dataRegionSize / bpb.BPB_SecPerClus;
+
+    return totalClusters;
+}
+
+uint32_t calculate_first_data_sector() {
+    // Sectors occupied by the reserved regions and the number of FATs
+    uint32_t reservedSectors = bpb.BPB_RsvdSecCnt;
+    uint32_t numberOfFATs = bpb.BPB_NumFATs;
+
+    // Sectors occupied by the root directory (root entries * size of a directory entry)
+    uint32_t rootDirSectors = ((bpb.BPB_RootEntCnt * 32) + (bpb.BPB_BytsPerSec - 1)) / bpb.BPB_BytsPerSec; //ZERO
+
+    // Calculate the sectors occupied by the FAT tables
+    uint32_t fatSize = bpb.BPB_FATSz32 * 2;
+
+    // Calculate the first data sector
+    uint32_t firstDataSector = bpb.BPB_RsvdSecCnt + fatSize + rootDirSectors;
+
+    return firstDataSector;
+}
+
+// you can give it another name
+// fill the parameters
 void main_process() {
-    while (1) {
+    char* input = "start";
+    while (strcmp(input, "exit") != 0) {
         // 1. get cmd from input.
+        showPrompt();
+        input = get_input(); 
         // you can use the parser provided in Project1
 
         // if cmd is "exit" break;
+        if (strcmp(input, "exit") == 0)
+		{
+			break;
+		}
+
+        tokens = get_tokens(input);
+
+
         // else if cmd is "cd" process_cd();
-        // else if cmd is "ls" process_ls();
-        // ...
+        if (strcmp(tokens->items[0], "cd") == 0)
+        {
+            //cd variables
+            char cwd[200];
+            int setenv(const char *name, const char *value, int overwrite);
+            //processing cd
+            if (tokens->size == 1) {chdir(getenv("HOME"));}
+			else {chdir(tokens->items[1]);}
+			getcwd(cwd,200);
+			setenv("PWD",cwd,1);
+            //process_cd(); 
+        } else if (strcmp(tokens->items[0], "ls") == 0)
+        {
+            process_ls();
+        } 
+        else if (strcmp(tokens->items[0], "open") == 0){
+            
+            if ( tokens->items[2], "r" == 0 || tokens->items[2], "w" == 0 ||
+            tokens->items[2], "rw" == 0 || tokens->items[2], "wr" == 0)
+            {
+                printf("File opened successfully\n");
+            }
+            else
+            {
+                printf("Error: File not opened\n");
+            }
+            
+
+            
+
+        }
+       
+        
+        else if (strcmp(tokens->items[0], "info") == 0)
+        {
+
+            //unsigned int rootCluster; 
+            //lseek(file, 44, SEEK_SET);    //BPB_RootClus.
+            //read(file, &rootCluster, 4);
+            uint32_t rootDirSectors = ((bpb.BPB_RootEntCnt * 32) + (bpb.BPB_BytsPerSec - 1)) / bpb.BPB_BytsPerSec;
+
+            uint32_t FirstDataSector	= bpb.BPB_RsvdSecCnt + (bpb.BPB_NumFATs* bpb.BPB_FATSz32); //+ rootDirSectors
+
+            printf("Bytes Per Sector: %u\n", bpb.BPB_BytsPerSec);
+            printf("Sectors Per Cluster: %u\n", bpb.BPB_SecPerClus);
+
+            printf("Total clusters in Data Region: %u\n", totalClustersInDataRegion());
+            printf("# of entries in one FAT: %u\n", bpb.BPB_FATSz16);
+            printf("Size of Image (bytes): %u\n", bpb.BPB_Media);
+            printf("Root Cluster: %u\n",bpb.BPB_RootClus);
+            printf("FirstDataSector: %u\n", FirstDataSector);
+            printf("Total Sectors: %u\n", bpb.BPB_TotSec32);
+            //these are the right ones below
+            printf("Reserved Sectors: %u\n", bpb.BPB_RsvdSecCnt);
+            printf("\nNumber of FATs: %u\n", bpb.BPB_NumFATs);    //rootcluster ???
+            printf("Root Entries: %u\n", bpb.BPB_RootEntCnt);
+            printf("Total Sectors: %u\n", bpb.BPB_TotSec32);
+        }
+        
     }
 }
-*/
 
 
+int main(int argc, char const *argv[])
+{
+    // 1. open the fat32.img
+    const char *imagePath = "../fat32.img";
 
-int main(int argc, char const *argv[]) {
-    // 1. Open the fat32.img
-    fat32_img = fopen("fat32.img", "rb"); // or another mode as appropriate
+    file = fopen(imagePath, "rb");
+    if (file == NULL) {
+        perror("Error opening file");
+        return 1;
+    }
+    
 
-    // 2. Mount the fat32.img
-    mount_fat32(fat32_img);
+    // 2. mount the fat32.img
 
-    // 3. Main process
-    main_process(fat32_img);
+    // Seek to the beginning of the boot sector
+    //size_t offset = offsetof(bpb, BPB_RootClus);
+    fseek(file, 0, SEEK_SET);
 
-    // 4. Close all opened files and clean up
-    // ...
+    // Read the BPB data into the structure
+    fread(&bpb, sizeof(bpb_t), 1, file);
 
-    // 5. Close the fat32.img
-    fclose(fat32_img);
+
+     // Calculate the offset to the root directory cluster
+    uint32_t rootDirCluster = bpb.BPB_RootClus;
+
+    // Calculate the offset in bytes
+    uint32_t rootDirOffset = ((rootDirCluster - 2) * bpb.BPB_SecPerClus + bpb.BPB_RsvdSecCnt +
+                             bpb.BPB_NumFATs * bpb.BPB_sectorsPerFAT32) *
+                             bpb.BPB_BytsPerSec;
+
+    // Seek to the beginning of the root directory
+    fseek(file, rootDirOffset, SEEK_SET);
+
+    main_process(); 
+
+
+    
+    // 3. main procees
+    
+
+    // 4. close all opened files
+
+    // 5. close the fat32.img
+    fclose(file);
 
     return 0;
 }

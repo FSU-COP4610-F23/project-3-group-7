@@ -119,6 +119,13 @@ uint32_t convert_clus_num_to_offset_in_fat_region(uint32_t clus_num) {
     return fat_region_offset + clus_num * 4;
 }
 
+
+uint32_t convert_clus_num_to_offset_in_data_region(uint32_t clus_num) {
+    uint32_t clus_size = 512;
+    uint32_t data_region_offset = 0x100400;
+    return data_region_offset + (clus_num - 2) * clus_size;
+}
+
 //Cluster number to FAT entry offset:
 
 //uint32_t offset_in_fat = fat_start_offset + cluster_num * 4;

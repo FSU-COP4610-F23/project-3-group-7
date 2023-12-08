@@ -78,6 +78,7 @@ typedef struct __attribute__((packed)) cluster {
     uint32_t next_clus_num;
     uint32_t BPB_SecPerClus;
     uint32_t BPB_FATSz32;
+    uint32_t end_clus_num;
     uint32_t max_clus_num;
     uint32_t min_clus_num;
     char cluster_path[100]; 
@@ -189,6 +190,18 @@ void dbg_print_dentry(dentry_t *dentry) {
     printf("DIR_FileSize: %u\n", dentry->DIR_FileSize);
 }
 
+void print_open_files()
+{
+    int index = 0; 
+    printf(" %-7s  %-12s  %-10s %-10s  %-8s\n", "INDEX", "NAME", "MODE", "OFFSET", "PATH");
+    for (int i = 0; i < num_opened_files; i++)
+    {
+        printf(" %-7d  %-12s  %-10s %-10d  %-8s\n", i, "NAME", "MODE", 0, "PATH");
+    }
+    
+    printf("\n"); 
+}
+
 
 /*void trim_spaces(char *str) {
     int len = strlen(str);
@@ -289,11 +302,9 @@ void read_directory(int fat32_fd, uint32_t dir_offset, uint32_t dir_size) {
             break;
         }
 
-        
-
         if (dentry->DIR_Name[0] != 0xE5 &&  // Entry is not deleted
             ((dentry->DIR_Attr & 0x0F) != 0x0F) &&
-            (dentry->DIR_Attr & 0x02) != 0x02) { // Entry is not a long filename
+            (dentry->DIR_Attr & 0x02) != 0x02) { 
 
             // Remove spaces from the directory name
             char formatted_name[13];
@@ -305,7 +316,7 @@ void read_directory(int fat32_fd, uint32_t dir_offset, uint32_t dir_size) {
             }
             formatted_name[j] = '\0';
 
-            printf("%s ", formatted_name);
+            printf("%s. ", formatted_name);
             dbg_print_dentry(dentry);
         }
 
@@ -415,6 +426,18 @@ void cd_process1(int fat32_fd, uint32_t dir_offset, uint32_t dir_size)
             break;
         }
 
+        // Remove spaces from the directory name
+            char formatted_name[13];
+            memset(formatted_name, 0, 13);
+
+            int i = 0, j = 0;
+            while (i < 11 && dentry->DIR_Name[i] != ' ' && dentry->DIR_Name[i] != '\0') {
+                formatted_name[j++] = dentry->DIR_Name[i++];
+            }
+            formatted_name[j] = '\0';
+
+            printf("%s. ", formatted_name);
+
         
         if (dentry->DIR_Name[0] != 0xE5 &&  // Entry is not deleted
             (dentry->DIR_Attr & 0x0F) != 0x0F) { // Entry is not a long filename
@@ -422,13 +445,13 @@ void cd_process1(int fat32_fd, uint32_t dir_offset, uint32_t dir_size)
             if((dentry->DIR_Attr & 0x10) == 0x10)
             {
                 printf("%s is a directory. \n", dentry->DIR_Name); 
-                if (strcmp("BLUE",tokens->items[1]) == 0)
+                if (strcmp(formatted_name,tokens->items[1]) == 0)
                 {
                     printf("%s was found, so cd into it! \n ", dentry->DIR_Name);
                     //dbg_print_dentry(dentry);
                     uint32_t cluster_number = ((uint32_t)dentry->DIR_FstClusHI << 16) | dentry->DIR_FstClusLO;
                     printf("cluster number: %u\n", cluster_number);
-                    current_dir_cluster = dentry->DIR_FstClusLO;
+                    //current_dir_cluster = dentry->DIR_FstClusLO;
                     printf("cluster number: %u\n", cluster_number);
                     strcat(cluster.cluster_path, tokens->items[1]);
                     strcat(cluster.cluster_path, "/");
@@ -439,14 +462,35 @@ void cd_process1(int fat32_fd, uint32_t dir_offset, uint32_t dir_size)
 
                     printf("TESTIDK"); 
                     fseek(file, cluster_number, SEEK_SET);
+                    printf("TESTTEST\n"); 
                     fread(&dentry, sizeof(dentry), 1, file);
+                    printf("MORE TESTS"); 
 
                     //return testDir.fstClusHI * 0x100 + testDir.fstClusLO;
+
+                    /*while (cluster_number != cluster.end_clus_num)
+                    {
+                        
+                        // Move to the next cluster based on the FAT information
+                        uint32_t next_cluster = value in FAT entry for current_cluster;
+
+                        // Check if it's the end of the chain
+                        if (next_cluster == cluster.end_clus_num) {
+                            // Reached the end of the cluster chain
+                            break;
+                        }
+
+                        // Move to the next cluster
+                        current_cluster = next_cluster;
+                    }*/
+                    
                     
                     return; 
                 }
 
-                if (strcmp("RED",tokens->items[1]) == 0)
+
+
+                /*if (strcmp("RED",tokens->items[1]) == 0)
                 {
                     printf("%s was found, so cd into it! \n ", dentry->DIR_Name);
                     strcat(cluster.cluster_path, tokens->items[1]);
@@ -464,7 +508,7 @@ void cd_process1(int fat32_fd, uint32_t dir_offset, uint32_t dir_size)
                     strcat(cluster.cluster_path, "/");
                     //dbg_print_dentry(dentry);
                     return; 
-                }
+                }*/
             }
         }
         //printf("%s was NOT found \n ", dentry->DIR_Name);
@@ -627,8 +671,18 @@ void open_file(int fat32_fd, const char* filename, const char* mode) {
         }
     }
 
+    // File found, add it to opened_files
+            strncpy(opened_files[num_opened_files].filename, filename, 12);
+            //opened_files[num_opened_files].first_cluster = ((dentry->DIR_FstClusHI << 16) | dentry->DIR_FstClusLO);
+            //opened_files[num_opened_files].size = dentry->DIR_FileSize;
+            opened_files[num_opened_files].current_offset = 0;
+            strncpy(opened_files[num_opened_files].mode, mode, 3);
+            num_opened_files++;
+
+    printf("opened %s\n", filename); 
+
     // Search for the file in the current directory
-    uint32_t current_offset = current_dir_cluster * bpb.BPB_SecPerClus * bpb.BPB_BytsPerSec;
+    /*uint32_t current_offset = current_dir_cluster * bpb.BPB_SecPerClus * bpb.BPB_BytsPerSec;
     uint32_t dir_size = bpb.BPB_BytsPerSec; // Assuming one sector per cluster
     char formatted_filename[12];
     format_dir_name(filename, formatted_filename);
@@ -664,9 +718,11 @@ void open_file(int fat32_fd, const char* filename, const char* mode) {
 
         free(dentry);
         current_offset += sizeof(dentry_t);
-    }
+    }*/
 
+    
     printf("Error: File '%s' not found.\n", filename);
+    printf("working?\n"); 
 }
 
 
@@ -720,7 +776,11 @@ void main_process(char const *argv, uint32_t rootDirOffset) {
                 printf("Error: Missing filename or flags.\n");
             } else {
                 open_file(fd, tokens->items[1], tokens->items[2]);
+                printf("hello?\n"); 
             }
+        }
+        else if (strcmp(tokens->items[0], "lsof") == 0) {
+            print_open_files(); 
         }
 
         //else if (strcmp(tokens->items[0], "close") == 0) {
@@ -806,7 +866,8 @@ int main(int argc, char const *argv[])
     cluster.next_clus_num = 0;
     cluster.BPB_SecPerClus = 1;
     cluster.BPB_FATSz32 = 1009;
-    cluster.max_clus_num = bpb.BPB_FATSz32 / bpb.BPB_SecPerClus;
+    cluster.end_clus_num = 0xffffffff;
+    cluster.max_clus_num = bpb.BPB_FATSz32;
     cluster.min_clus_num = 2;
     strcat(cluster.cluster_path, "/");
 
@@ -850,6 +911,9 @@ int main(int argc, char const *argv[])
     uint32_t rootDirOffset = ((rootDirCluster - 2) * bpb.BPB_SecPerClus + bpb.BPB_RsvdSecCnt +
                              bpb.BPB_NumFATs * bpb.BPB_FATSz32) *
                              bpb.BPB_BytsPerSec;
+    
+    //printf("Root Directory Offset: 0x%x bytes\n", rootDirOffsetCHECK);
+    //return 1;
 
     // Seek to the beginning of the root directory
     fseek(file, rootDirOffset, SEEK_SET);

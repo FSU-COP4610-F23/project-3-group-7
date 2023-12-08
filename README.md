@@ -25,15 +25,16 @@ User must ensure that they are in the main 'project-3-group-7' folder. Inside th
 We solely used 'filesys.c' for all of the functionality of our FAT32 Img system. In addition, we used the provided 'lexer.c' and 'lexer.h' files for provided funtionality of the tokens list.
 
 ## File Layout
+```
 ├── Makefile
 ├── README.md
     └── src
         ├── filesys.c
         ├── lexer.c
         └── lexer.h
-
+```
 After making: 
-
+```
 ├── Makefile
 ├── README.md
     └── src
@@ -44,7 +45,7 @@ After making:
         ├── filesys
         ├── lexer.o
         └── filesys.o
-
+```
 ## Division of Labor
 
 All groups members worked collaboratively on all parts of this project.
